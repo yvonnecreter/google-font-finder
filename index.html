@@ -1,0 +1,66 @@
+<!-- static/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Font Identifier</title>
+    <style>
+        #drop-zone {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+        }
+        .preview-img {
+            max-width: 500px;
+            margin: 20px 0;
+        }
+        .result-item {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div id="drop-zone">
+        Drag & Drop Image Here
+    </div>
+    <img id="preview" class="preview-img">
+    <div id="results"></div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const preview = document.getElementById('preview');
+        const results = document.getElementById('results');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#666';
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            preview.src = URL.createObjectURL(file);
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const fonts = await response.json();
+            showResults(fonts);
+        });
+
+        function showResults(fonts) {
+            results.innerHTML = fonts.map(font => `
+                <div class="result-item">
+                    ${font.font} (${Math.round(font.probability * 100)}%)
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
