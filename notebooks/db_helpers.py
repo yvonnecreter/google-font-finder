@@ -169,41 +169,24 @@ def generate_character_image(font_path, char, size=128, font_size=100):
         return Image.new('L', (size, size), color=255)
 
 
-def preprocess_character(img, target_size=64):
+def preprocess_character(img, target_size=128):
     """Process character image for feature extraction"""
     # Convert to numpy array
     img = np.array(img)
     
     # Threshold to binary (black/white)
-    _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
+    _, binary = cv2.threshold(img, 250, 255, cv2.THRESH_BINARY_INV)
     
     # Find contours and crop to character
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if contours:
-        x,y,w,h = cv2.boundingRect(contours[0])
+    cnt, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if cnt:
+        x,y,w,h = cv2.boundingRect(cnt[0])
         img = img[y:y+h, x:x+w]
-    
-    # Resize with padding to maintain aspect ratio
-    h, w = img.shape
-    scale = min(target_size/h, target_size/w)
-    new_h, new_w = int(h * scale), int(w * scale)
-    resized = cv2.resize(img, (new_w, new_h))
-    
-    # Pad to target size
-    pad_top = (target_size - new_h) // 2
-    pad_bottom = target_size - new_h - pad_top
-    pad_left = (target_size - new_w) // 2
-    pad_right = target_size - new_w - pad_left
-    
-    padded = cv2.copyMakeBorder(
-        resized,
-        pad_top, pad_bottom,
-        pad_left, pad_right,
-        cv2.BORDER_CONSTANT,
-        value=255
-    )
-    processed = 1.0 - (padded.astype(np.float32) / 255.0)
-    return processed
+        # Resize with padding to maintain aspect ratio
+        img = cv2.resize(img, (target_size,target_size))  # Resize for CNN
+        img = 1.0 - (img.astype(np.float32) / 255.0)
+    else: img = np.zeros((target_size, target_size))
+    return img
 
 def get_font_id(family=None, style=None, weight=None, file_path=None, db_path='../db/fonts.db'):
     """

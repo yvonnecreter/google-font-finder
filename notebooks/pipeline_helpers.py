@@ -28,7 +28,7 @@ def preprocess_image(img_path):
 
     return cropped
 
-def segment_characters(img):
+def segment_characters(img, target_size=128):
     # Denoising
     kernel = np.ones((3,3), np.uint8)
     processed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
@@ -40,7 +40,7 @@ def segment_characters(img):
     for cnt in contours:
         x,y,w,h = cv2.boundingRect(cnt)
         char_img = img[y:y+h, x:x+w]
-        char_img = cv2.resize(char_img, (64,64))  # Resize for CNN
+        char_img = cv2.resize(char_img, (target_size,target_size))  # Resize for CNN
         chars.append((x, char_img))
     
     # Sort left-to-right
