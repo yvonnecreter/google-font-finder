@@ -5,6 +5,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import typing_extensions
 from torchvision.models import resnet18
 from db_helpers import get_db_connection
+from config.settings import DATABASE, DEBUG
 
 # Initialize CNN model
 model = resnet18(pretrained=True)
@@ -92,9 +93,6 @@ def load_features(conn, font_id, char):
     blob = c.fetchone()[0]
     return np.frombuffer(blob, dtype=np.float32)
 
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-
 def get_char_similarity(font_id, features_blob, features):
     try:
         # Load and compare features
@@ -110,10 +108,10 @@ def get_char_similarity(font_id, features_blob, features):
         print(f"Error comparing features for font {font_id}: {str(e)}")
         return False
 
-def match_char(char_img, char, conn_cursor, debug=False):
+def match_char(char_img, char, conn_cursor):
     # Features
     features = get_cnn_features(char_img)
-    if debug: print(features)
+    if DEBUG: print(features)
     matches = []
 
     # Fetch from db
@@ -130,7 +128,7 @@ def match_char(char_img, char, conn_cursor, debug=False):
 
     return matches
 
-def match_characters(char_imgs, detected_text, db_path='../db/fonts.db', debug = False):
+def match_characters(char_imgs, detected_text, db_path=DATABASE['path']):
     """Thread-safe character matching with database connection handling"""
     font_scores = {}
 
@@ -145,40 +143,8 @@ def match_characters(char_imgs, detected_text, db_path='../db/fonts.db', debug =
                 if font_id not in font_scores:
                     font_scores[font_id] = []
                 font_scores[font_id].append(similarity)
-                if debug: print(f'Comparing {font_id}')
-        conn.close()
+                if DEBUG: print(f'Comparing {font_id}')
     return font_scores
-
-def batch_match_characters(char_images, chars, db_path='../db/fonts.db'):
-    """Optimized batch matching of multiple characters"""
-    # Pre-compute all features first
-    features_list = [get_cnn_features(img) for img in char_images]
-    
-    results = []
-    with get_db_connection(db_path) as conn:
-        c = conn.cursor()
-        
-        for char, features in zip(chars, features_list):
-            char_matches = []
-            c.execute('''SELECT font_id, features_blob FROM characters 
-                         WHERE char = ?''', (char,))
-            
-            for font_id, features_blob in c.fetchall():
-                if features_blob is None:
-                    continue
-                    
-                try:
-                    db_features = np.frombuffer(features_blob, dtype=np.float32)
-                    similarity = cosine_similarity(
-                        features.reshape(1, -1),
-                        db_features.reshape(1, -1)
-                    )[0][0]
-                    char_matches.append((font_id, similarity))
-                except Exception as e:
-                    print(f"Error processing font {font_id}: {str(e)}")
-                    continue
-            results.append(char_matches)
-    return results
 
 def get_cnn_features(img):
     """Modified to work with thread-safe connection handling"""

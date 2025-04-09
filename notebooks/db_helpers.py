@@ -9,6 +9,7 @@ import numpy as np
 import threading
 import time
 from contextlib import contextmanager
+from config.settings import DATABASE, DEBUG
 
 
 # Thread-local storage for database connections
@@ -28,7 +29,7 @@ def get_db_connection(db_path):
     # Connection remains open for thread reuse
     # Will be closed when thread ends
 
-def init_db(db_path='../db/fonts.db'):
+def init_db(db_path=DATABASE['path']):
     """Initialize database with proper settings"""
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     
@@ -58,7 +59,7 @@ def init_db(db_path='../db/fonts.db'):
     
     return True
 
-def add_font(font_path, db_path='../db/fonts.db', max_retries=3):
+def add_font(font_path, db_path=DATABASE['path'], max_retries=3):
     """Add font to database with retry logic for locking issues"""
     for attempt in range(max_retries):
         try:
@@ -109,13 +110,14 @@ def _add_font_transaction(conn, font_path):
                 from pipeline_helpers import get_cnn_features
                 features = get_cnn_features(processed)
                 
-                svg_path = f"../db/chars/{font_id}_{ord(char)}.svg"
-                char_data.append((
-                    font_id, 
-                    char, 
-                    svg_path, 
-                    features.tobytes()
-                ))
+                # TODO
+                # svg_path = f"../db/chars/{font_id}_{ord(char)}.svg"
+                # char_data.append((
+                #     font_id, 
+                #     char, 
+                #     svg_path, 
+                #     features.tobytes()
+                # ))
             except Exception as e:
                 print(f"Error processing character {char}: {str(e)}")
                 continue
@@ -190,3 +192,69 @@ def preprocess_character(img, target_size=64):
     )
     processed = 1.0 - (padded.astype(np.float32) / 255.0)
     return processed
+
+def get_font_id(family=None, style=None, weight=None, file_path=None, db_path='../db/fonts.db'):
+    """
+    Get font ID based on font characteristics or file path.
+    
+    Args:
+        family: Font family name
+        style: Font style (e.g., 'normal', 'italic')
+        weight: Font weight (e.g., 400, 700)
+        file_path: Path to font file
+        db_path: Path to database
+        
+    Returns:
+        Font ID if found, None otherwise
+    """
+    with get_db_connection(db_path) as conn:
+        c = conn.cursor()
+        
+        if file_path:
+            # Search by file path (which is UNIQUE in the table)
+            c.execute('SELECT id FROM fonts WHERE file_path = ?', (file_path,))
+        else:
+            # Search by font characteristics
+            query = 'SELECT id FROM fonts WHERE family = ?'
+            params = [family]
+            
+            if style is not None:
+                query += ' AND style = ?'
+                params.append(style)
+            if weight is not None:
+                query += ' AND weight = ?'
+                params.append(weight)
+                
+            c.execute(query, params)
+        
+        result = c.fetchone()
+        return result[0] if result else None
+    
+
+def get_fontinfo_from_id(font_id, db_path=DATABASE['path']):
+    """
+    Get all font information for a given font ID.
+    
+    Args:
+        font_id: The ID of the font to look up
+        db_path: Path to the database file
+        
+    Returns:
+        A dictionary containing all font information if found, None otherwise
+    """
+    with get_db_connection(db_path) as conn:
+        c = conn.cursor()
+        c.execute('''SELECT id, family, style, weight, file_path 
+                     FROM fonts 
+                     WHERE id = ?''', (font_id,))
+        
+        result = c.fetchone()
+        if result:
+            return {
+                'id': result[0],
+                'family': result[1],
+                'style': result[2],
+                'weight': result[3],
+                'file_path': result[4]
+            }
+        return None
