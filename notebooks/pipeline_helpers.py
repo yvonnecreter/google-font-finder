@@ -4,6 +4,7 @@ import torch
 from sklearn.metrics.pairwise import cosine_similarity
 import typing_extensions
 from torchvision.models import resnet18
+from db_helpers import get_db_connection
 
 # Initialize CNN model
 model = resnet18(pretrained=True)
@@ -94,41 +95,59 @@ def load_features(conn, font_id, char):
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-def match_characters(char_img, char, db_path='../db/fonts.db'):
-    """Thread-safe character matching with database connection handling"""
+def get_char_similarity(font_id, features_blob, features):
+    try:
+        # Load and compare features
+        db_features = np.frombuffer(features_blob, dtype=np.float32)
+        
+        # Reshape for sklearn's cosine_similarity
+        features_2d = features.reshape(1, -1)
+        db_features_2d = db_features.reshape(1, -1)
+        
+        cos_similarity = cosine_similarity(features_2d, db_features_2d)[0][0]
+        return cos_similarity
+    except Exception as e:
+        print(f"Error comparing features for font {font_id}: {str(e)}")
+        return False
+
+def match_char(char_img, char, conn_cursor, debug=False):
+    # Features
     features = get_cnn_features(char_img)
-    print(features)
+    if debug: print(features)
     matches = []
+
+    # Fetch from db
+    conn_cursor.execute('''SELECT font_id, features_blob FROM characters 
+                WHERE char = ?''', (char,))
     
-    # Use our thread-safe connection context manager
-    from db_helpers import get_db_connection
-    with get_db_connection(db_path) as conn:
-        c = conn.cursor()
-        
-        # First get all potential matches
-        c.execute('''SELECT font_id, features_blob FROM characters 
-                     WHERE char = ?''', (char,))
-        
-        # Process each match
-        for font_id, features_blob in c.fetchall():
-            if features_blob is None:
-                continue
-                
-            try:
-                # Load and compare features
-                db_features = np.frombuffer(features_blob, dtype=np.float32)
-                
-                # Reshape for sklearn's cosine_similarity
-                features_2d = features.reshape(1, -1)
-                db_features_2d = db_features.reshape(1, -1)
-                
-                similarity = cosine_similarity(features_2d, db_features_2d)[0][0]
-                matches.append((font_id, similarity))
-            except Exception as e:
-                print(f"Error comparing features for font {font_id}: {str(e)}")
-                continue
+    # Match
+    for font_id, features_blob in conn_cursor.fetchall():
+        if features_blob is None:
+            continue
+
+        cos_similarity = get_char_similarity(font_id=font_id, features_blob=features_blob, features=features)
+        if cos_similarity: matches.append((font_id,cos_similarity))
 
     return matches
+
+def match_characters(char_imgs, detected_text, db_path='../db/fonts.db', debug = False):
+    """Thread-safe character matching with database connection handling"""
+    font_scores = {}
+
+    # open db
+    with get_db_connection(db_path) as conn:
+        c = conn.cursor()
+
+        for char_img, char in zip(char_imgs, detected_text):
+            # match character
+            matches = match_char(char_img = char_img, char=char, conn_cursor=c)
+            for font_id, similarity in matches:
+                if font_id not in font_scores:
+                    font_scores[font_id] = []
+                font_scores[font_id].append(similarity)
+                if debug: print(f'Comparing {font_id}')
+        conn.close()
+    return font_scores
 
 def batch_match_characters(char_images, chars, db_path='../db/fonts.db'):
     """Optimized batch matching of multiple characters"""
@@ -136,7 +155,6 @@ def batch_match_characters(char_images, chars, db_path='../db/fonts.db'):
     features_list = [get_cnn_features(img) for img in char_images]
     
     results = []
-    from db_helpers import get_db_connection
     with get_db_connection(db_path) as conn:
         c = conn.cursor()
         

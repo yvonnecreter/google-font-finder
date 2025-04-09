@@ -9,7 +9,7 @@ import numpy as np
 import threading
 import time
 from contextlib import contextmanager
-from pipeline_helpers import get_cnn_features
+
 
 # Thread-local storage for database connections
 _thread_local = threading.local()
@@ -106,6 +106,7 @@ def _add_font_transaction(conn, font_path):
             try:
                 img = generate_character_image(font_path, char)
                 processed = preprocess_character(img)
+                from pipeline_helpers import get_cnn_features
                 features = get_cnn_features(processed)
                 
                 svg_path = f"../db/chars/{font_id}_{ord(char)}.svg"
