@@ -7,5 +7,5 @@ DATABASE = {
 }
 DEBUG = False
 DIR = {
-    "fonts": str(BASE_DIR / "db" / "google-fonts"),
+    "fonts": str(BASE_DIR / "db" / "google-fonts/"),
 }

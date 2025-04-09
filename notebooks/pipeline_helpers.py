@@ -11,19 +11,21 @@ from config.settings import DATABASE, DEBUG
 model = resnet18(pretrained=True)
 model.eval()
 
-def preprocess_image(image_path):
-    img = cv2.imread(image_path)
+def preprocess_image(img_path):
+    img = cv2.imread(img_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
     # Adaptive thresholding
-    thresh = cv2.adaptiveThreshold(gray, 255, 
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    # thresh = cv2.adaptiveThreshold(gray, 255, 
+    #     cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 55, 2)
+    # Binary thresholding
+    thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY_INV)[1]
     
-    # Autocrop
+    # # Autocrop
     coords = cv2.findNonZero(thresh)
     x,y,w,h = cv2.boundingRect(coords)
     cropped = thresh[y:y+h, x:x+w]
-    
+
     return cropped
 
 def segment_characters(img):

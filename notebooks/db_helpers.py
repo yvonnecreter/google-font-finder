@@ -16,7 +16,7 @@ from config.settings import DATABASE, DEBUG
 _thread_local = threading.local()
 
 @contextmanager
-def get_db_connection(db_path):
+def get_db_connection(db_path=DATABASE['path']):
     """Context manager for thread-safe database connections"""
     if not hasattr(_thread_local, "conn"):
         _thread_local.conn = sqlite3.connect(db_path)
@@ -58,6 +58,18 @@ def init_db(db_path=DATABASE['path']):
         conn.commit()
     
     return True
+
+def PILImage_to_CV2(pil_image):
+    '''Convert PIL Image → OpenCV (BGR format)'''
+    img_cv = np.array(pil_image)  # Shape: (H, W, 3) for RGB
+    img_cv = cv2.resize(img_cv, (64, 64))  # Resize to 64x64
+
+    
+    return img_cv  # Returns a NumPy array (BGR format)
+
+def character_outlines(img):
+    
+    return img
 
 def add_font(font_path, db_path=DATABASE['path'], max_retries=3):
     """Add font to database with retry logic for locking issues"""
@@ -110,14 +122,14 @@ def _add_font_transaction(conn, font_path):
                 from pipeline_helpers import get_cnn_features
                 features = get_cnn_features(processed)
                 
-                # TODO
+                svg_path = ''
                 # svg_path = f"../db/chars/{font_id}_{ord(char)}.svg"
-                # char_data.append((
-                #     font_id, 
-                #     char, 
-                #     svg_path, 
-                #     features.tobytes()
-                # ))
+                char_data.append((
+                    font_id, 
+                    char, 
+                    svg_path, 
+                    features.tobytes()
+                ))
             except Exception as e:
                 print(f"Error processing character {char}: {str(e)}")
                 continue
