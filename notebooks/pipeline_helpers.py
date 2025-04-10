@@ -76,22 +76,6 @@ def segment_characters(img, target_size=128):
     # Sort left-to-right
     return [img for x, img in sorted(chars, key=lambda x: x[0])]
 
-def get_cnn_features(img):
-    """Simplified CNN feature extraction for testing"""
-    # Mock implementation - replace with actual model
-    if len(img.shape) == 2:  # Grayscale
-        img = np.stack([img]*3, axis=0)  # Convert to 3 channels
-    else:
-        img = np.transpose(img, (2, 0, 1))  # CHW format
-    
-    # Simple feature extraction - replace with actual model
-    features = np.concatenate([
-        img.mean(axis=(1, 2)),  # Channel means
-        img.std(axis=(1, 2)),   # Channel stds
-        img.reshape(-1)[::100]   # Sample of pixels
-    ])
-    return features.astype(np.float32)
-
 # data_helpers.py (additional functions)
 def get_font_features(font_id, conn):
     c = conn.cursor()
@@ -191,4 +175,5 @@ def get_cnn_features(img):
     # Get features - using our thread-safe model
     with torch.no_grad():
         features = model(img_tensor)
+        
     return features.cpu().numpy().flatten()

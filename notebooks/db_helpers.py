@@ -172,7 +172,8 @@ def preprocess_character(img, target_size=128):
     # Find contours and crop to character
     cnt, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if cnt:
-        x,y,w,h = cv2.boundingRect(cnt[0])
+        all_points = np.concatenate(cnt)
+        x,y,w,h = cv2.boundingRect(all_points)
         img = img[y:y+h, x:x+w]
         from pipeline_helpers import pad_and_resize_char
         img = 1.0 - (img.astype(np.float32) / 255.0)
