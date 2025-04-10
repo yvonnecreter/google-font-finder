@@ -14,7 +14,7 @@ model.eval()
 def preprocess_image(img_path):
     img = cv2.imread(img_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
+
     # Adaptive thresholding
     # thresh = cv2.adaptiveThreshold(gray, 255, 
     #     cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 55, 2)
@@ -28,6 +28,32 @@ def preprocess_image(img_path):
 
     return cropped
 
+def pad_and_resize_char(char_img, target_size):
+    '''Example usage:
+    x,y,w,h = cv2.boundingRect(cnt)
+    char_img = img[y:y+h, x:x+w]
+    processed_img = pad_and_resize_char(char_img, target_size=32)  # for 64x64 output'''
+
+    # Get original dimensions
+    h, w = char_img.shape[:2]
+    
+    # Determine which dimension is smaller
+    if h < w:
+        # Height is shorter, pad height
+        pad_top = (w - h) // 2
+        pad_bottom = (w - h) - pad_top
+        padded_img = cv2.copyMakeBorder(char_img, pad_top, pad_bottom, 0, 0, cv2.BORDER_CONSTANT, value=0)
+    else:
+        # Width is shorter or equal, pad width
+        pad_left = (h - w) // 2
+        pad_right = (h - w) - pad_left
+        padded_img = cv2.copyMakeBorder(char_img, 0, 0, pad_left, pad_right, cv2.BORDER_CONSTANT, value=0)
+    
+    # Resize to 2*target_size x 2*target_size
+    resized_img = cv2.resize(padded_img, (2*target_size, 2*target_size), interpolation=cv2.INTER_AREA)
+    
+    return resized_img
+
 def segment_characters(img, target_size=128):
     # Denoising
     kernel = np.ones((3,3), np.uint8)
@@ -40,6 +66,10 @@ def segment_characters(img, target_size=128):
     for cnt in contours:
         x,y,w,h = cv2.boundingRect(cnt)
         char_img = img[y:y+h, x:x+w]
+        
+        # pad and resize shorter side to 2*target_size
+        char_img = pad_and_resize_char(char_img, target_size*2)
+        char_img = cv2.blur(char_img, (4, 4)) 
         char_img = cv2.resize(char_img, (target_size,target_size))  # Resize for CNN
         chars.append((x, char_img))
     

@@ -50,7 +50,6 @@ def init_db(db_path=DATABASE['path']):
         c.execute('''CREATE TABLE IF NOT EXISTS characters
                      (font_id INTEGER,
                       char TEXT,
-                      svg_path TEXT,
                       features_blob BLOB,
                       UNIQUE(font_id, char),
                       FOREIGN KEY(font_id) REFERENCES fonts(id))''')
@@ -67,24 +66,20 @@ def PILImage_to_CV2(pil_image):
     
     return img_cv  # Returns a NumPy array (BGR format)
 
-def character_outlines(img):
-    
-    return img
 
-def add_font(font_path, db_path=DATABASE['path'], max_retries=3):
+def add_font(font_path,conn, db_path=DATABASE['path'], max_retries=3):
     """Add font to database with retry logic for locking issues"""
     for attempt in range(max_retries):
         try:
-            with get_db_connection(db_path) as conn:
                 return _add_font_transaction(conn, font_path)
-        except sqlite3.OperationalError as e:
+        except Exception as e:
             if "locked" in str(e) and attempt < max_retries - 1:
                 time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                if DEBUG: print(f"Retrying after {0.5 * (attempt + 1)} seconds for {font_path}...")
                 continue
-            raise
-        except Exception as e:
-            print(f"Error processing {font_path}: {str(e)}")
-            raise
+            else:
+                print(f"Error processing {font_path}: {str(e)} in add_font")
+                raise
 
 def _add_font_transaction(conn, font_path):
     """Core font addition logic within a transaction"""
@@ -92,7 +87,6 @@ def _add_font_transaction(conn, font_path):
     name = font['name'].getDebugName(1)
     style = font['name'].getDebugName(2)
     weight = font['OS/2'].usWeightClass
-
     c = conn.cursor()
     
     # Check if font already exists
@@ -108,7 +102,8 @@ def _add_font_transaction(conn, font_path):
     
     # Process characters in batches
     cmap = font.getBestCmap()
-    print(cmap)
+    if DEBUG: print(cmap)
+
     batch_size = 100
     char_items = [(code, chr(code)) for code in cmap]
     for i in range(0, len(char_items), batch_size):
@@ -122,28 +117,25 @@ def _add_font_transaction(conn, font_path):
                 from pipeline_helpers import get_cnn_features
                 features = get_cnn_features(processed)
                 
-                svg_path = ''
-                # svg_path = f"../db/chars/{font_id}_{ord(char)}.svg"
                 char_data.append((
                     font_id, 
                     char, 
-                    svg_path, 
                     features.tobytes()
                 ))
             except Exception as e:
-                print(f"Error processing character {char}: {str(e)}")
+                print(f"Error processing character {char}: {str(e)} in add_font_transaction")
                 continue
         
         # Insert batch
         if char_data:
             c.executemany('''INSERT OR IGNORE INTO characters 
-                          (font_id, char, svg_path, features_blob) 
-                          VALUES (?,?,?,?)''', char_data)
+                          (font_id, char, features_blob) 
+                          VALUES (?,?,?)''', char_data)
             conn.commit()
-    
-    return font_id
+            print(f"Added {font_id}"  )
+    return True
 
-def generate_character_image(font_path, char, size=128, font_size=100):
+def generate_character_image(font_path, char, size=256, font_size=200):
     """Generate a clean image of a single character"""
     try:
         # Create blank white image
@@ -175,16 +167,17 @@ def preprocess_character(img, target_size=128):
     img = np.array(img)
     
     # Threshold to binary (black/white)
-    _, binary = cv2.threshold(img, 250, 255, cv2.THRESH_BINARY_INV)
+    _, binary = cv2.threshold(img, 80, 255, cv2.THRESH_BINARY_INV)
     
     # Find contours and crop to character
     cnt, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if cnt:
         x,y,w,h = cv2.boundingRect(cnt[0])
         img = img[y:y+h, x:x+w]
-        # Resize with padding to maintain aspect ratio
-        img = cv2.resize(img, (target_size,target_size))  # Resize for CNN
+        from pipeline_helpers import pad_and_resize_char
         img = 1.0 - (img.astype(np.float32) / 255.0)
+        img = pad_and_resize_char(img, target_size)
+        img = cv2.resize(img, (target_size,target_size))  # Resize for CNN
     else: img = np.zeros((target_size, target_size))
     return img
 
