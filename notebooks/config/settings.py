@@ -8,4 +8,6 @@ DATABASE = {
 DEBUG = False
 DIR = {
     "fonts": str(BASE_DIR / "db" / "google-fonts/"),
+    "data": str(BASE_DIR/ "data/"),
+    "models": str(BASE_DIR/ "models/"),
 }

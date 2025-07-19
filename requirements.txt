@@ -1,0 +1,10 @@
+torch
+fontTools
+matplotlib
+opencv-python
+transformers
+pillow
+tqdm
+numpy
+torchvision
+scikit-learn
